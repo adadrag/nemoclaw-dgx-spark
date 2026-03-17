@@ -84,7 +84,7 @@ The DGX Spark has a few platform-specific issues that NemoClaw's `setup-spark` c
 | Docker | 29.1.3 |
 | Node.js | 22.x (installed by NemoClaw bootstrap) |
 | NemoClaw | latest (2026-03-17) |
-| Ollama | latest (installed during Phase 2) |
+| Ollama | 0.18.1 |
 | Atlas | avarok/atlas-alpha2:latest (v0.1.0) |
 | CUDA Driver | 580.126.09 |
 | CUDA Version | 13.0 |
@@ -318,33 +318,55 @@ sudo systemctl stop ollama
 python3 benchmarks/benchmark-nemotron.py --engine atlas --test all
 ```
 
-### Single Request Speed
+### Single Request Speed (Ollama, Nemotron 3 Super 120B)
 
-| Test | Ollama tok/s | Atlas tok/s | Speedup |
-|------|-------------|-------------|---------|
-| Short response | - | - | - |
-| Medium response (1024 tokens) | - | - | - |
-| Long response (4096 tokens) | - | - | - |
-| Code generation | - | - | - |
-| Reasoning | - | - | - |
+| Test | Time | Est. tok/s | TTFT |
+|------|------|-----------|------|
+| Short response (128 tokens) | 6.7s | ~10 | 321ms |
+| Medium response (1024 tokens) | 51.6s | ~8.3 | 392ms |
+| Long response (4096 tokens) | 206.2s | ~8.3 | 400ms |
+| Code generation (2048 tokens) | 103.2s | ~10.3 | 458ms |
+| Reasoning (256 tokens) | 8.4s | ~8.3 | 403ms |
+
+### Speed Validation (10 iterations, 1024 max tokens)
+
+| Metric | Ollama |
+|--------|--------|
+| Mean | 5.8 tok/s |
+| Median | 5.6 tok/s |
+| Stddev | 1.6 tok/s |
+| Min | 2.9 tok/s |
+| Max | 8.3 tok/s |
+
+> Note: Token counts are estimated (word-based). The variance is due to the model's thinking/reasoning mode consuming tokens internally. Actual decode speed is consistent (~51.5s per 1024-token request).
 
 ### Concurrency (RAG-style prompts)
 
-| Concurrent Users | Ollama Per-User tok/s | Atlas Per-User tok/s | Ollama Aggregate | Atlas Aggregate |
-|:---:|---:|---:|---:|---:|
-| 1 | - | - | - | - |
-| 5 | - | - | - | - |
-| 10 | - | - | - | - |
-| 20 | - | - | - | - |
+| Concurrent Users | Per-User tok/s | Aggregate tok/s | Avg Latency |
+|:---:|---:|---:|---:|
+| 1 | 2.1 | 2.1 | 6.7s |
+| 5 | 1.2 | 1.9 | 18.9s |
+| 10 | 0.4 | 2.2 | 39.3s |
+| 20 | 0.5 | 1.8 | 66.9s |
 
 ### GPU Memory Usage
 
-| Engine | Model Memory | Total Used |
-|--------|-------------|------------|
-| Ollama | - | - |
-| Atlas | - | - |
+| Engine | Model Memory | Notes |
+|--------|-------------|-------|
+| Ollama (Nemotron 3 Super 120B) | 89.7 GB | 70% of 128GB unified memory |
+| Atlas (Qwen3.5-35B-A3B NVFP4) | 10.3 GB | See [sibling repo](https://github.com/adadrag/qwen3.5-dgx-spark) |
 
-> Results tables will be filled after benchmarks are run on the DGX Spark. See `benchmarks/results/` for raw JSON data.
+### Cross-Model Comparison (DGX Spark)
+
+| Model | Engine | Median tok/s | TTFT | Memory |
+|-------|--------|-------------|------|--------|
+| Qwen3.5-35B-A3B (3B active) | Atlas | **95.9** | 40ms | 10.3 GB |
+| Qwen3.5-35B-A3B (3B active) | vLLM | ~31 | varies | ~18 GB |
+| Nemotron 3 Super 120B (12B active) | Ollama | ~5.8 | 400ms | 89.7 GB |
+
+The 120B model is 4x the active parameters of the 35B model and uses 9x more memory, resulting in significantly slower inference. For latency-sensitive applications, the 35B MoE models on Atlas offer the best performance on DGX Spark.
+
+> See `benchmarks/results/` for raw JSON data.
 
 ## Troubleshooting
 
@@ -415,6 +437,30 @@ Permission denied (os error 13)
 ```bash
 sudo usermod -aG docker $USER
 newgrp docker  # or log out and back in
+```
+
+### OpenShell gateway can't reach Ollama
+
+```
+failed to connect to http://host.openshell.internal:11434/v1
+```
+
+**Cause:** Ollama defaults to listening on `127.0.0.1` only. The k3s pod inside OpenShell can't reach localhost.
+
+**Fix:** Make Ollama listen on all interfaces:
+
+```bash
+sudo bash -c 'mkdir -p /etc/systemd/system/ollama.service.d && \
+echo -e "[Service]\nEnvironment=\"OLLAMA_HOST=0.0.0.0\"" > /etc/systemd/system/ollama.service.d/override.conf && \
+systemctl daemon-reload && systemctl restart ollama'
+```
+
+Then update the provider to use the host's actual IP:
+
+```bash
+HOST_IP=$(hostname -I | awk '{print $1}')
+openshell provider update ollama-local --config "OPENAI_BASE_URL=http://${HOST_IP}:11434/v1"
+openshell inference set --provider ollama-local --model nemotron-3-super:120b
 ```
 
 ### NemoClaw experimental endpoints not showing
