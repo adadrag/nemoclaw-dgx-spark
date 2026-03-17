@@ -80,16 +80,14 @@ The DGX Spark has a few platform-specific issues that NemoClaw's `setup-spark` c
 
 | Component | Version |
 |-----------|---------|
-| DGX OS | Ubuntu 24.04 |
-| Docker | 28.x |
-| Node.js | 22.x |
+| DGX OS | Ubuntu 24.04.4 LTS |
+| Docker | 29.1.3 |
+| Node.js | 22.x (installed by NemoClaw bootstrap) |
 | NemoClaw | latest (2026-03-17) |
-| Ollama | 0.18.x |
-| Atlas | avarok/atlas-alpha2:latest |
+| Ollama | latest (installed during Phase 2) |
+| Atlas | avarok/atlas-alpha2:latest (v0.1.0) |
 | CUDA Driver | 580.126.09 |
 | CUDA Version | 13.0 |
-
-> Version numbers will be updated as testing is performed on the device.
 
 ## Phase 1: Quick Start with NVIDIA Cloud
 
