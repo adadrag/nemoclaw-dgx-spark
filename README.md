@@ -285,9 +285,11 @@ sandbox@my-assistant:~$ openclaw agent --agent main --local -m "hello" --session
 
 ### Critical: Set reasoning=false for Atlas
 
-When using Atlas with OpenClaw, you **must** set `reasoning: false` in both config files inside the sandbox. Otherwise OpenClaw instructs the model to think step-by-step, but Atlas's API doesn't return a separate `thinking` field — the model's reasoning leaks into the visible response and the actual answer is lost.
+When using Atlas with Qwen3.5, you **must** set `reasoning: false` in the OpenClaw model configuration. Atlas's API does not return a separate `thinking` field — if reasoning is enabled, the model's chain-of-thought leaks into the visible response and the actual answer is lost.
 
-Fix both files inside the sandbox:
+**Note:** This issue is specific to the **NemoClaw sandbox** (OpenClaw 2026.3.11). A direct OpenClaw 2026.3.13 installation connecting to Atlas works perfectly without this fix — the thinking is handled correctly. If you're using OpenClaw directly (not through NemoClaw), set `reasoning: false` in your model config and Atlas will return clean responses.
+
+**For NemoClaw sandbox users**, fix both config files inside the sandbox:
 
 ```bash
 # Connect to sandbox
@@ -313,6 +315,31 @@ for path in [
     except Exception as e:
         print(f'Skip {path}: {e}')
 "
+```
+
+**For direct OpenClaw users** (no NemoClaw), add Atlas as a provider in `~/.openclaw/openclaw.json`:
+
+```json
+{
+  "models": {
+    "providers": {
+      "atlas": {
+        "baseUrl": "http://192.168.42.2:8001/v1",
+        "apiKey": "not-needed",
+        "api": "openai-completions",
+        "models": [{
+          "id": "Kbenkhaled/Qwen3.5-35B-A3B-NVFP4",
+          "name": "Qwen 3.5 35B A3B (Atlas)",
+          "reasoning": false,
+          "input": ["text"],
+          "cost": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0},
+          "contextWindow": 131072,
+          "maxTokens": 8192
+        }]
+      }
+    }
+  }
+}
 ```
 
 ### Atlas Caveats
