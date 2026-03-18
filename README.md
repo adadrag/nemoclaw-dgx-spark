@@ -463,6 +463,39 @@ openshell provider update ollama-local --config "OPENAI_BASE_URL=http://${HOST_I
 openshell inference set --provider ollama-local --model nemotron-3-super:120b
 ```
 
+### OpenClaw memory lost when sandbox is recreated
+
+OpenClaw stores conversation history, personality (`soul.md`), and memory (`memory.md`) inside the sandbox at `/sandbox/.openclaw/`. These files are **ephemeral** — they are lost when the sandbox is destroyed and recreated (e.g., during re-onboarding or upgrades).
+
+**Workaround:** Back up before destroying a sandbox:
+
+```bash
+# Connect to sandbox
+nemoclaw <name> connect
+
+# Inside sandbox — create backup
+tar czf /tmp/openclaw-backup.tar.gz ~/.openclaw/
+exit
+
+# From host — pull the backup out
+openshell sandbox exec <name> -- cat /tmp/openclaw-backup.tar.gz > ~/openclaw-backup.tar.gz
+```
+
+To restore after creating a new sandbox:
+
+```bash
+# Copy backup into new sandbox
+openshell sandbox exec <name> -- bash -c 'cat > /tmp/openclaw-backup.tar.gz' < ~/openclaw-backup.tar.gz
+
+# Connect and restore
+nemoclaw <name> connect
+cd ~ && tar xzf /tmp/openclaw-backup.tar.gz
+```
+
+### OpenClaw version pinned inside NemoClaw
+
+NemoClaw pins OpenClaw to a specific version in its Dockerfile (e.g., `openclaw@2026.3.11`). It does not auto-update. You cannot update it inside the sandbox due to network policy restrictions. To get a newer OpenClaw version, wait for an updated NemoClaw release.
+
 ### NemoClaw experimental endpoints not showing
 
 If the onboard wizard only shows "NVIDIA Build" and "NCP" options, local inference endpoints are hidden.
