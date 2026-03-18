@@ -283,6 +283,38 @@ nemoclaw my-assistant connect
 sandbox@my-assistant:~$ openclaw agent --agent main --local -m "hello" --session-id test
 ```
 
+### Critical: Set reasoning=false for Atlas
+
+When using Atlas with OpenClaw, you **must** set `reasoning: false` in both config files inside the sandbox. Otherwise OpenClaw instructs the model to think step-by-step, but Atlas's API doesn't return a separate `thinking` field — the model's reasoning leaks into the visible response and the actual answer is lost.
+
+Fix both files inside the sandbox:
+
+```bash
+# Connect to sandbox
+nemoclaw <name> connect
+
+# Fix openclaw.json — set reasoning to false for the model
+python3 -c "
+import json
+for path in [
+    '/sandbox/.openclaw/openclaw.json',
+    '/sandbox/.openclaw/agents/main/agent/models.json'
+]:
+    try:
+        with open(path) as f:
+            d = json.load(f)
+        providers = d.get('models', d).get('providers', d.get('providers', {}))
+        for prov in providers.values():
+            for m in prov.get('models', []):
+                m['reasoning'] = False
+        with open(path, 'w') as f:
+            json.dump(d, f, indent=2)
+        print(f'Fixed {path}')
+    except Exception as e:
+        print(f'Skip {path}: {e}')
+"
+```
+
 ### Atlas Caveats
 
 | Concern | Detail |
